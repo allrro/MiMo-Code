@@ -10,6 +10,8 @@ import { MemoryTool } from "./memory"
 import { ReadTool } from "./read"
 import { ActorTool } from "./actor"
 import { TaskTool } from "./task"
+import { CronTool } from "./cron"
+import { SessionTool } from "./session"
 import { WorkflowTool } from "./workflow"
 import { WebFetchTool } from "./webfetch"
 import { WriteTool } from "./write"
@@ -22,6 +24,7 @@ import { type ToolContext as PluginToolContext, type ToolDefinition } from "@mim
 import z from "zod"
 import { Plugin } from "../plugin"
 import { Provider } from "../provider"
+import { Worktree } from "../worktree"
 import { ProviderID, type ModelID } from "../provider/schema"
 import { WebSearchTool } from "./websearch"
 import { CodeSearchTool } from "./codesearch"
@@ -57,6 +60,7 @@ import { Memory } from "@/memory"
 import { History } from "@/history"
 import { SessionCheckpoint } from "@/session/checkpoint"
 import { TaskRegistry } from "@/task/registry"
+import { defaultLayer as SchedulerDefaultLayer } from "@/cron/scheduler"
 import { Auth } from "@/auth"
 import { shellWrap } from "./shell-wrap"
 import * as BashInteractive from "./bash-interactive"
@@ -142,6 +146,8 @@ export const layer = Layer.effect(
     const historytool = yield* HistoryTool
     const memorytool = yield* MemoryTool
     const tasktool = yield* TaskTool
+    const crontool = yield* CronTool
+    const sessiontool = yield* SessionTool
     const workflowtool = yield* WorkflowTool
     const agent = yield* Agent.Service
 
@@ -229,6 +235,8 @@ export const layer = Layer.effect(
           memory: Tool.init(memorytool),
           history: Tool.init(historytool),
           task: Tool.init(tasktool),
+          cron: Tool.init(crontool),
+          session: Tool.init(sessiontool),
           workflow: Tool.init(workflowtool),
         })
 
@@ -257,6 +265,8 @@ export const layer = Layer.effect(
             tool.memory,
             tool.history,
             tool.task,
+            ...(Flag.MIMOCODE_EXPERIMENTAL_CRON ? [tool.cron] : []),
+            ...(Flag.MIMOCODE_EXPERIMENTAL_ORCHESTRATOR ? [tool.session] : []),
             ...(Flag.MIMOCODE_EXPERIMENTAL_WORKFLOW_TOOL ? [tool.workflow] : []),
           ],
           actor: tool.actor,
@@ -342,6 +352,12 @@ export const layer = Layer.effect(
         filtered = filtered.filter((tool) => tool.id === "invalid" || allowed.has(tool.id))
       }
 
+      // The `session` tool is orchestrator-only. Orchestrator is a
+      // full-capability agent (no toolAllowlist), so gate on the agent name
+      // rather than an allowlist: every other agent — primaries without an
+      // allowlist (build/plan/compose) and subagents — must not see `session`.
+      filtered = filtered.filter((tool) => tool.id !== "session" || input.agent.name === "orchestrator")
+
       const cfg = yield* config.get()
       const resolveStyle = (toolId: string): "json" | "shell" => resolveInvocationStyle(cfg.tool, toolId)
 
@@ -414,7 +430,7 @@ export const defaultLayer = Layer.suspend(() =>
     Layer.provide(CrossSpawnSpawner.defaultLayer),
     Layer.provide(Ripgrep.defaultLayer),
     Layer.provide(Truncate.defaultLayer),
-    Layer.provide(Layer.mergeAll(ActorRegistry.defaultLayer, ActorWaiter.defaultLayer)),
+    Layer.provide(Layer.mergeAll(ActorRegistry.defaultLayer, ActorWaiter.defaultLayer, Worktree.defaultLayer)),
     Layer.provide(Team.defaultLayer),
     Layer.provide(
       Layer.mergeAll(
@@ -422,6 +438,7 @@ export const defaultLayer = Layer.suspend(() =>
         History.defaultLayer,
         SessionCheckpoint.defaultLayer,
         TaskRegistry.defaultLayer,
+        SchedulerDefaultLayer,
         Auth.defaultLayer,
       ),
     ),
