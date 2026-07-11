@@ -51,6 +51,8 @@ export const dict: Record<string, string> = {
     "Run {highlight}/dark{/highlight} for dark mode or {highlight}/light{/highlight} for light mode",
   "tui.tips.doc": "Run {highlight}/doc{/highlight} to open the user documentation",
   "tui.tips.free_models": "Free models are available for a limited time — try them now!",
+  "tui.tips.multi_skills":
+    "Combine multiple {highlight}/skill-name{/highlight} triggers in a single message to use several skills together",
   "tui.tips.background":
     "Run {highlight}/background{/highlight} to set a custom image as your home background",
   "tui.tips.undo": "Use {highlight}/undo{/highlight} to revert the last message and file changes",
@@ -249,12 +251,23 @@ export const dict: Record<string, string> = {
   "tui.command.model.cycle_favorite.title": "Favorite cycle",
   "tui.command.model.cycle_favorite_reverse.title": "Favorite cycle reverse",
   "tui.command.agent.list.title": "Switch agent",
+  "tui.command.modalities.title": "Configure input modalities",
+  "tui.modalities.title": "Input modalities — {{model}}",
+  "tui.modalities.saved": "Input modalities updated: {{modalities}}",
+  "tui.modalities.no_model": "No model selected",
+  "tui.modalities.hint.toggle": "toggle",
+  "tui.modalities.hint.save": "save",
   "tui.command.mcp.list.title": "Toggle MCPs",
   "tui.command.never_ask.title_on": "Never-ask: ON (auto-decide, permissions excluded) — click to turn off",
   "tui.command.never_ask.title_off": "Never-ask: OFF — click to turn on (auto-decide, permissions excluded)",
   "tui.command.never_ask.toast_on":
     "Never-ask ON — I won't prompt you; I'll pick the best option myself until you turn it off (/never-ask). Permission requests still need your approval.",
   "tui.command.never_ask.toast_off": "Never-ask OFF — I'll ask you at decision points again.",
+  "tui.command.skip_permissions.title_on": "Skip-permissions: ON (auto-allow permission asks) — click to turn off",
+  "tui.command.skip_permissions.title_off": "Skip-permissions: OFF — click to turn on (auto-allow permission asks)",
+  "tui.command.skip_permissions.toast_on":
+    "Skip-permissions ON — asks auto-allowed (subagents too). Destructive commands still prompt but auto-reject after 60s if unanswered.",
+  "tui.command.skip_permissions.toast_off": "Skip-permissions OFF — asks need your approval again.",
   "tui.command.agent.cycle.title": "Agent cycle",
   "tui.command.variant.cycle.title": "Variant cycle",
   "tui.command.variant.list.title": "Switch model variant",
