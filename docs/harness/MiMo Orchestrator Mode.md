@@ -20,6 +20,31 @@ Orchestrator 模式要解决的正是这个问题：**让你只用一个窗口�
 
 **默认关闭**：整套能力由单一 flag `MIMOCODE_EXPERIMENTAL_ORCHESTRATOR` 门控（见第 6 章）。关闭时 MiMoCode 与从前完全一致——没有 Orchestrator 模式、没有 `session` 工具、没有审批路由、没有工作区切换。
 
+### 1.1 为什么不用其他方案
+
+在设计 Orchestrator 之前，我们评估了以下替代路径：
+
+| 方案 | 优势 | 放弃原因 |
+|------|------|----------|
+| **多面板 / split pane**（tmux、终端 multiplexer） | 视觉直观，每个面板独立 | 仍需手动切换焦点；面板数量受屏幕空间限制；无法用自然语言协调 |
+| **IDE 多根工作区**（VS Code multi-root） | 文件树统一视图 | 绑定特定 IDE；无跨会话记忆；无自主执行能力 |
+| **消息队列 / 事件驱动** | 松耦合、可扩展 | 引入外部依赖；对用户不透明；调试困难 |
+| **WebSocket 长连接** | 实时双向通信 | 增加连接管理复杂度；不适合 TUI 场景 |
+| **手动多窗口**（现状） | 零学习成本 | 注意力碎片化；无法统一协调；进度追踪靠人脑 |
+
+**选择"单会话 + 子会话"的核心理由**：它在不引入外部依赖的前提下，用 MiMoCode 已有的会话基础设施（session、inbox、worktree）实现了"一个对话窗口管理多个并行任务"，且用户可以通过 `mimo -c <id>` 随时 attach 进任意子会话查看/接管——比多面板更灵活，比消息队列更透明。
+
+### 1.2 价值评估
+
+| 指标 | 手动多窗口 | Orchestrator 模式 |
+|------|-----------|-------------------|
+| 同时管理 3 个任务的注意力开销 | 高（3 个窗口 × 上下文切换） | 低（1 个窗口，inbox 通知） |
+| 任务间协调 | 手动（人脑追踪谁完成了什么） | 自动（Orchestrator 统一汇总） |
+| 新人上手成本 | 低（开窗口就行） | 中（需理解 session 工具和委派模型） |
+| 适合场景 | 2-3 个简单任务 | 3+ 个复杂任务、跨仓库并行开发 |
+
+**适用边界**：如果你通常只同时推进 1-2 个任务，手动多窗口可能更直接。Orchestrator 的价值在 3+ 并行任务、跨仓库开发、或需要统一协调汇报的场景中才会显著体现。
+
 ## 2. 整体模型
 
 ```
@@ -77,6 +102,19 @@ worktree 在 `dir` 所属仓库自己的 Instance 上创建/删除（跨项目�
 - **中断**：中断 Orchestrator **不会**停掉它的 child ——它们继续后台运行并在完成时通知。要停某个 child 用 `session cancel <id>`。整个会话退出时所有 child 随之退出。
 - **恢复全部**：`session list` 枚举子会话，对"最后结果不是成功（被取消/失败/从未汇报）或仍有未完成任务"的 child，用 `actor` 的 send 转发一条消息让它继续。没有单独的 resume 命令——用 list + 转发驱动。
 
+### 3.4 已知风险与边界（盲点扫描）
+
+以下是设计过程中识别到的分布式状态一致性风险：
+
+| 风险 | 场景 | 当前处理 | 残余风险 |
+|------|------|----------|----------|
+| **Orchestrator 重启后 child 仍在运行** | 用户关闭 TUI 再重开 | child 通过 inbox 通知独立运行，重启后 `session list` 可重新发现 | 如果 child 在重启期间完成，通知可能丢失——需手动 `list` 检查 |
+| **多个 child 同时完成** | 3+ child 在相近时间完成 | 每个 child 独立发送 inbox 通知，Orchestrator 逐条处理 | 并发通知不会丢失（inbox 是队列），但 Orchestrator 可能需要多轮处理 |
+| **child 运行时间极长** | 任务需要数小时 | child 后台持续运行，Orchestrator 不轮询 | 用户可能忘记 child 在跑——建议用 `/goal` 设置超时或阶段性检查点 |
+| **child 失败但未报告** | child 崩溃或被系统杀死 | 当前无自动重启机制 | 需用户手动 `session list` 发现失败 child 并决定是否重试 |
+| **worktree 残留** | child 被 cancel 但 worktree 未清理 | cancel 操作会同时删除 worktree 和分支 | 如果进程被强制杀死，worktree 可能残留——可用 `git worktree list` 手动清理 |
+| **权限审批超时** | child 请求权限但用户长时间未响应 | 5 分钟后自动拒绝（`FORWARD_DENY_TIMEOUT_MS`） | 自动拒绝可能导致 child 任务失败——用户需重新授权并让 child 重试 |
+
 ## 4. 子会话权限审批路由
 
 **问题**：后台运行的 child 没有直接面对用户的交互面板。默认情况下，一个后台会话碰到"需要询问（ask）"的权限门（如访问工作区外的目录、读 `.env`）会被**直接拒绝**（`interactive:false` → `DeniedError`），用户看不到、也无从批准。
@@ -127,7 +165,61 @@ Flag 在 import 时求值一次（读 `process.env`）。测试里在 `test/prel
 5. 子会话完成会唤醒 Orchestrator 并给你 toast；需要审批的操作会转发给你（或按你的 `grant-approval` 授权自动批）。
 6. 满意后让 Orchestrator 把各 isolated child 的 `mimocode/*` 分支合并集成。
 
-## 8. 相关源码
+## 8. 设计参考与对标
+
+Orchestrator 的设计参考了以下已有模式和系统：
+
+| 参考物 | 借鉴了什么 | 与 Orchestrator 的差异 |
+|--------|-----------|----------------------|
+| **tmux session manager** | 单窗口管理多个独立会话 | tmux 靠视觉切换；Orchestrator 靠自然语言协调 + inbox 通知 |
+| **VS Code multi-root workspace** | 多个项目在同一界面 | 绑定 GUI；无自主执行；无跨会话记忆 |
+| **Kubernetes Pod 调度** | 声明式目标 → 控制器自动拆分 → 子任务并行 | K8s 面向容器；Orchestrator 面向 AI 会话 |
+| **Actor 模型（Erlang/Akka）** | 独立进程 + 消息传递 + 容错 | Actor 是通用计算模型；Orchestrator 专注 AI 编程场景 |
+| **Claude Code subagent** | 主 agent 派生子 agent 并行工作 | Claude Code subagent 是进程内；Orchestrator child 是独立会话，可 attach/接管 |
+
+核心设计决策：选择"独立会话 + inbox 通知"而非"进程内 subagent"，是因为独立会话允许用户随时 attach 进去查看/接管，而进程内 subagent 对用户不透明。
+
+## 9. 验证清单
+
+完成开发后，用以下步骤验证 Orchestrator 功能正常：
+
+```bash
+# 1. 基本派发
+# 启动 Orchestrator，输入："创建一个 build 子会话，任务是 ls 当前目录"
+# 预期：child 创建成功，完成后 Orchestrator 收到通知并汇报结果
+
+# 2. 隔离 worktree
+# 输入："创建一个 build 子会话，任务是 touch test.txt，目录设为 /path/to/repo，启用 isolate"
+# 预期：child 在独立 worktree 中创建文件，不影响主目录
+
+# 3. 权限审批转发
+# 在 child 中触发一个需要权限的操作（如读 .env）
+# 预期：Orchestrator 收到转发请求，用户可通过 approve 或 grant-approval 处理
+
+# 4. 并行派发
+# 同时创建 3 个 child，分别执行不同任务
+# 预期：3 个 child 并行运行，各自完成后独立通知
+
+# 5. 会话恢复
+# 关闭 TUI，重新启动，切到 Orchestrator 模式
+# 预期：之前的 child 会话仍然可见（session list）
+
+# 6. 集成合并
+# 让 isolated child 完成一个文件修改，然后用 git merge 合并其分支
+# 预期：合并成功，文件变更正确应用
+```
+
+## 10. 读者理解验证
+
+阅读完本文档后，用以下问题检验你是否真正理解 Orchestrator 的设计：
+
+1. **如果你需要给一个已有仓库同时添加登录页和计费模块，你会如何使用 Orchestrator？** 需要创建几个 child？是否需要 isolate？为什么？
+2. **如果一个 child 在你关闭 TUI 期间完成了任务，你重新启动后如何发现并处理它？**
+3. **Orchestrator 的核心边界是什么？它不做哪些工作？为什么这样设计？**
+
+如果你能清晰回答这三个问题，说明你已经掌握了 Orchestrator 的核心设计。如果某个问题回答困难，回头查看对应的章节。
+
+## 11. 相关源码
 
 | 关注点 | 位置 |
 |---|---|

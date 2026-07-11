@@ -12,6 +12,16 @@ Execute plan by dispatching fresh subagent per task, with two-stage review after
 
 **Core principle:** Fresh subagent per task + two-stage review (spec then quality) = high quality, fast iteration
 
+**When is this worth the overhead?** This skill adds 3x subagent invocations per task (implementer + 2 reviewers) plus controller prep work. The investment pays off when:
+
+| Scenario | Overhead justified? | Why |
+|----------|-------------------|-----|
+| 5+ tasks with clear spec | Yes | Parallel-safe + review gates catch issues early |
+| 1-3 simple tasks | Marginal | Manual execution may be faster |
+| Tasks with ambiguous spec | No | Spec review will fail repeatedly; brainstorm first |
+| Tight deadline, single task | No | Direct implementation is faster |
+| Cross-cutting changes (all files depend on each other) | No | Tasks aren't independent; conflicts likely |
+
 **Continuous execution:** Do not pause to check in with your human partner between tasks. Execute all tasks from the plan without stopping. The only reasons to stop are: BLOCKED status you cannot resolve, ambiguity that genuinely prevents progress, or all tasks complete. "Should I continue?" prompts and progress summaries waste their time — they asked you to execute the plan, so execute it. When you must stop for ambiguity or a blocker, use `compose:ask` to present the situation with structured options. If no user is available, resolve it with your best judgment and continue.
 
 ## When to Use
@@ -149,6 +159,42 @@ Implementer subagents report one of four statuses. Handle each appropriately:
 
 **Never** ignore an escalation or force the same model to retry without changes. If the implementer said it's stuck, something needs to change.
 
+## Failure Modes & Recovery (Blind-Spot Scan)
+
+Before dispatching, be aware of these failure scenarios:
+
+| Failure | Symptom | Recovery |
+|---------|---------|----------|
+| **Subagent crashes mid-task** | No report returned; task stuck in `in_progress` | Check `task list` for stalled tasks; re-dispatch with same or more capable model |
+| **Context overflow** | Subagent produces truncated or incoherent output | Reduce context provided; break task into smaller pieces |
+| **Spec reviewer misinterprets spec** | Repeated false `fail` verdicts on correctly implemented code | Re-dispatch reviewer with clarified spec text; consider using a more capable model |
+| **Implementer overbuilds** | Code works but implements claims from other tasks' scope | Re-dispatch with explicit scope boundary reminder; reviewer should catch extra work |
+| **Review loop stuck** | Same issue flagged repeatedly without resolution | Manually inspect the failing claim; may be a spec ambiguity — fix the spec, not the code |
+| **Git conflict after merge** | Multiple tasks modified same file despite "independent" assumption | Merge incrementally; resolve conflicts as they arise; may need to re-run affected tasks |
+| **Worktree forgotten** | Subagent ran in wrong directory; tests pass against wrong checkout | Always include `cd <worktree>` when worktree is in use; re-dispatch affected tasks |
+
+**Prevention checklist** (run before Task 1):
+- Are tasks truly independent? (no shared file writes without coordination)
+- Is the spec unambiguous? (each claim has exactly one interpretation)
+- Is the worktree path correctly set? (if using `compose:worktree`)
+- Are model tiers appropriate? (reviewer ≥ implementer capability)
+
+## Deviation Reporting
+
+When the execution process diverges from the expected flow, record the deviation:
+
+**What to record:**
+- Which task deviated and why (e.g., spec ambiguity, unexpected dependency, model limitation)
+- What alternative path was taken
+- Whether the deviation affects subsequent tasks
+- Whether the original plan needs updating
+
+**When to record:**
+- Mid-execution: only for deviations that change scope, task ordering, or review outcomes
+- At completion: summarize all significant deviations in the final report to the human
+
+**Format:** Keep deviations concise. One line per deviation is sufficient for most cases. Do not generate verbose logs.
+
 ## Prompt Templates
 
 - `./implementer-prompt.md` - Dispatch implementer subagent
@@ -272,6 +318,18 @@ Done!
 - Review loops add iterations
 - But catches issues early (cheaper than debugging later)
 
+## Comparison with Alternative Approaches
+
+| Approach | How it works | When to prefer over subagent-driven |
+|----------|-------------|--------------------------------------|
+| **Manual execution** | Controller implements each task directly | 1-3 simple tasks; tight deadline |
+| **compose:execute** (parallel sessions) | Each task runs in a separate session | Tasks need full isolation; cross-repo work |
+| **Single-pass review** | One reviewer, one round | Low-risk changes; well-tested codebase |
+| **No review** | Implement and ship | Prototyping; throwaway code; personal projects |
+| **CI/CD only** | Automated tests catch issues post-merge | Mature test suite; small changes; hotfixes |
+
+**Key design decision:** Two-stage review (spec compliance → code quality) is chosen over single-pass because spec compliance catches *scope* errors (built wrong thing) while code quality catches *construction* errors (built right thing badly). These are independent failure modes that a single reviewer may miss.
+
 ## Red Flags
 
 **Never:**
@@ -323,3 +381,23 @@ Compose skills do NOT appear in subagents' `available_skills` list by default. W
 
 **Alternative workflow:**
 - **compose:execute** - Use for parallel session instead of same-session execution
+
+## Post-Execution Verification
+
+After all tasks complete, verify the human understands what was built — not just that they received it.
+
+**For complex implementations (5+ tasks, architectural changes):**
+- Summarize what was built in 2-3 sentences (not a task-by-task log)
+- List the most important design decisions and why they were made
+- Identify which files were changed and what the human needs to maintain
+- Note any deviations from the original plan and their implications
+- Ask 2-3 targeted questions focused on what the human needs to own, e.g.:
+  - "If you need to add a new feature to this module, which files would you modify?"
+  - "What's the most fragile part of this implementation that needs careful testing?"
+  - "Which design decision would you change if requirements shifted?"
+
+**For simple implementations (1-3 tasks):**
+- Confirm tests pass and spec is satisfied
+- Brief summary of changes
+
+**Do not** produce a verbose task-by-task transcript. The human needs to understand the outcome, not relive the process.

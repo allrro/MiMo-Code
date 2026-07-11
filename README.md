@@ -20,6 +20,21 @@ MiMoCode is a terminal-native AI coding assistant. It can read and write code, r
 
 MiMo Auto is built in as a free-for-limited-time channel, so you can start with zero configuration. MiMoCode also supports connecting to any mainstream LLM provider API.
 
+### Why MiMoCode
+
+Existing AI coding tools fall into two camps: IDE integrations (Cursor, Windsurf) and terminal agents (Claude Code, Aider). MiMoCode's core differentiation:
+
+| Dimension | IDE Integration | Terminal Agent (general) | MiMoCode |
+|-----------|----------------|--------------------------|----------|
+| Interface | Embedded in editor | Terminal conversation | Terminal TUI + multi-panel |
+| Memory | None or limited | No cross-session memory | SQLite FTS5 persistent memory, auto-restored across sessions |
+| Context | Manual management | Single session | Auto-checkpoints + context reconstruction + budgeted injection |
+| Autonomy | Completion assist | Single-step execution | Goal-driven loops + stop-condition judge + self-evolution |
+| Orchestration | None | None | Compose workflows + parallel subagents + Orchestrator mode |
+| Cost | Paid | Paid | MiMo Auto free-for-limited-time channel |
+
+**Terminal-native isn't always better** — If you work primarily in a large IDE, rely on graphical debuggers, or are unfamiliar with the command line, an IDE integration may be a more natural fit. MiMoCode is best suited for: developers who prefer terminal workflows, scenarios requiring long-running autonomous task execution, and teams that want AI to accumulate project understanding across sessions.
+
 ---
 
 ## Quick Start
@@ -43,6 +58,26 @@ The first launch guides you through configuration automatically. Supported optio
 - **Xiaomi MiMo Platform** — OAuth login
 - **Import from Claude Code** — migrate existing authentication in one step
 - **Custom Provider** — add any OpenAI-compatible API in the TUI
+
+### Verify Installation
+
+After installing, run these checks to confirm everything works:
+
+```bash
+# 1. Check version
+mimo --version
+
+# 2. Launch the TUI (you should see the mode selection screen)
+mimo
+
+# 3. Type a simple command in the TUI, for example:
+# "list the files in the current directory"
+# If the agent can read files and return results, basic functionality is working.
+
+# 4. Test memory (optional)
+# Close the TUI, relaunch, and type: "What did you work on last time?"
+# If the agent recalls the previous conversation, the memory system is working.
+```
 
 <details>
 <summary><strong>WSL: clipboard issues</strong></summary>
@@ -77,6 +112,22 @@ some older non-Unicode programs to display incorrectly, so treat it as a workaro
 Beyond MiMoCode, Xiaomi MiMo models also work in other agents and coding tools like Cursor, Cline, and Zed.
 
 **[awesome-mimo-agent](https://github.com/XiaomiMiMo/awesome-mimo-agent)** collects setup guides for using MiMo in those tools — worth a look if you want to try MiMo elsewhere. Contributions welcome: open a PR to add your own setup.
+
+---
+
+## What Can It Do for You
+
+Before diving into features, here are some real-world scenarios:
+
+| Scenario | Traditional approach | MiMoCode approach |
+|----------|---------------------|-------------------|
+| Refactor a module spanning 10 files | Manual file-by-file edits, easy to miss dependencies | Auto-scan dependencies → generate plan → parallel edits → type check → report deviations |
+| Research a new technical approach | Manually search, read, compare, write report | `/deep-research` auto multi-source research → parallel sub-agents collect cited findings → Markdown report with citations |
+| Write tests for a project | Manually analyze code → write tests → debug | TDD skill: write failing tests first → implement → pass → commit |
+| Develop across multiple repos in parallel | Open multiple terminal windows, switch manually | Orchestrator mode: single window manages multiple child sessions, auto-isolated worktrees |
+| Onboard onto a new codebase | Read docs, ask colleagues, explore files one by one | Have the agent scan the codebase, answer architecture questions, generate documentation |
+
+**Key principle: Building is easier, but creating value is still hard.** MiMoCode accelerates execution, but deciding what's worth building, whether it solves a real problem, and whether users will adopt it — these judgments still require humans.
 
 ---
 
@@ -394,7 +445,57 @@ bun turbo typecheck      # Type check
 
 ## Relationship to OpenCode
 
-MiMoCode is built as a fork of [OpenCode](https://github.com/anomalyco/opencode). It keeps all core OpenCode capabilities (multiple providers, TUI, LSP, MCP, plugins) and adds persistent memory, intelligent context management, subagent orchestration, goal-driven autonomous loops, compose workflows, and self-improvement via dream/distill.
+MiMoCode is built as a fork of [OpenCode](https://github.com/anomalyco/opencode).
+
+**Core capabilities inherited from OpenCode:**
+- Multiple provider support (OpenAI, Anthropic, Google, etc.)
+- Terminal TUI interface framework
+- LSP language server integration
+- MCP tool protocol support
+- Plugin system foundation
+
+**What MiMoCode adds on top:**
+
+| New capability | Problem it solves |
+|----------------|-------------------|
+| Persistent memory (SQLite FTS5) | Every session starts by re-learning project context |
+| Intelligent context management | Long sessions lose or overflow context |
+| Subagent system | Complex tasks can't be parallelized |
+| Goal-driven loops + stop-condition judge | Agent self-declares "done" too early |
+| Compose workflows | No structured flow from spec to shipped code |
+| Dream & Distill | Repeated workflows can't auto-crystallize into reusable skills |
+| Orchestrator mode | Multi-task requires multiple windows managed manually |
+| Token-efficient mode | Bash output noise wastes context window |
+
+---
+
+## Known Limitations
+
+Understand these boundaries before you start:
+
+| Limitation | Description | Impact |
+|------------|-------------|--------|
+| **Terminal dependency** | Requires a command-line environment; no web or desktop GUI | Not suitable for purely graphical workflows |
+| **Context window** | Bound by model context length; very large codebases may lose details | Use with the memory system rather than stuffing everything in one shot |
+| **Autonomous execution risk** | Long-running autonomous work may drift from the goal | Use `/goal` to set stop conditions and check task progress periodically |
+| **Memory is not real-time** | Project memory updates via periodic scans, not live sync | After major code changes, run `/dream` manually to refresh memory |
+| **Experimental features** | Orchestrator, Max Mode, etc. are marked experimental | Use with caution in production; features may change or be rolled back |
+| **Network dependency** | Requires connection to an LLM API or MiMo service | Core features do not work offline |
+
+---
+
+## Version History
+
+MiMoCode is under rapid iteration. Key milestones:
+
+| Time | Milestone | Description |
+|------|-----------|-------------|
+| 2025 Q1 | Forked from OpenCode | Inherited multi-provider, TUI, LSP, MCP core architecture |
+| 2025 Q2 | Persistent memory + context management | Solved "re-learning project context every session" |
+| 2025 Q2 | Subagents + Compose workflows | Parallel task decomposition and specs-driven development |
+| 2025 Q3 | Dream & Distill | Agent self-evolution: extract knowledge from sessions, crystallize skills |
+| 2025 Q3 | Orchestrator mode (experimental) | Single-window multi-task management with background child sessions |
+| 2025 Q3 | Token-efficient mode (experimental) | Clean bash output noise, save context window space |
 
 ---
 
