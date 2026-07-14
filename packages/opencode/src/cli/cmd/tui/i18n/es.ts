@@ -51,6 +51,8 @@ export const dict = {
   "tui.tips.shell_prefix":
     "Empieza un mensaje con {highlight}!{/highlight} para ejecutar comandos del shell directamente (p. ej., {highlight}!ls -la{/highlight})",
   "tui.tips.tab_agent":
+    "Pulsa {highlight}Tab{/highlight} o {highlight}Shift+Tab{/highlight} para alternar entre los agentes Build, Plan y Compose",
+  "tui.tips.tab_agent_orchestrator":
     "Pulsa {highlight}Tab{/highlight} o {highlight}Shift+Tab{/highlight} para alternar entre los agentes Build, Plan, Compose y Orchestrator",
   "tui.tips.theme_mode":
     "Ejecuta {highlight}/dark{/highlight} para el modo oscuro o {highlight}/light{/highlight} para el modo claro",
@@ -286,6 +288,7 @@ export const dict = {
   "tui.skill.html-to-video-pipeline.description": "El arma definitiva para vídeos cortos — crea vídeos cortos con HTML",
   "tui.skill.arxiv.description": "Busca, cita, descarga y sigue artículos de arXiv",
   "tui.skill.skill-creator.description": "Crea, revisa y mejora skills de agente",
+  "tui.skill.drive-mimo.description": "Controla programáticamente otro proceso MiMoCode — eventos JSON headless o TUI interactiva vía tmux",
   "tui.skill.research-paper-writing.description": "Redacta, pule y critica artículos académicos con perspectiva de revisor",
   "tui.skill.design-blueprint.description":
     "Producir un plano de diseño (DESIGN.md + Decision Trace) antes de crear cualquier mockup",
@@ -348,6 +351,8 @@ export const dict = {
   "tui.command.variant.cycle.title": "Ciclo de variantes",
   "tui.command.variant.list.title": "Cambiar variante de modelo",
   "tui.command.agent.cycle.reverse.title": "Ciclo de agentes (inverso)",
+  "tui.agent.locked": "No se puede cambiar de modo después de entrar en modo {{mode}}",
+  "tui.agent.locked.subset": "En esta sesión, solo puede cambiar entre {{agents}}",
   "tui.command.provider.login.title": "Iniciar sesión",
   "tui.command.provider.connect.title": "Conectar proveedor",
   "tui.command.provider.logout.title": "Cerrar sesión",
@@ -440,6 +445,7 @@ export const dict = {
   "tui.command.session.ask.title": "Hacer una pregunta lateral",
   "tui.command.session.ask.description": "Pregunta a la sesión actual sin interrumpirla",
   "tui.command.session.ask.placeholder": "Haz una pregunta lateral…",
+  "tui.command.session.ask.busy": "Pensando…",
   "tui.command.session.unshare.title": "Dejar de compartir",
   "tui.command.session.undo.title": "Deshacer mensaje anterior",
   "tui.command.session.redo.title": "Rehacer",
