@@ -161,8 +161,10 @@ uv run scripts/insert_slide.py unpacked/ --blank-from slideLayout5.xml
 uv run scripts/diagnose.py output.pptx
 ```
 
-Every script is a small, self-contained Python file. Read the top of the file
-for its full CLI options.
+Every script is a small Python CLI. Some scripts (e.g. `render_pdf.py`,
+`render_slides.py`, `contact_sheet.py`) import from a shared helper
+(`soffice_bridge.py`) in the same directory — copy them together. Read the top
+of each file for its full CLI options.
 
 ## Live preview
 
@@ -365,9 +367,15 @@ isn't, inform the user and offer to spawn a vision subagent instead.
   display size (see `create.md` → *Images*).
 - **Fonts not embedded** — `python-pptx` does not embed fonts. If the deck
   is opened on a machine without the chosen font, PowerPoint substitutes,
-  and layout drifts. Either use system-safe fonts (Calibri, Arial, Segoe UI,
-  Times New Roman, Consolas) or ship the .pptx alongside a font install
-  step.
+  and layout drifts. For **Latin** text, prefer system-safe fonts (Calibri,
+  Arial, Segoe UI, Times New Roman, Consolas) or ship the .pptx alongside a
+  font install step.
+- **CJK text needs the East-Asian font slot** — `run.font.name` only sets the
+  Latin typeface (`a:latin`); Chinese / Japanese / Korean glyphs come from the
+  East-Asian slot (`a:ea`), which python-pptx does not expose. Leave it unset
+  and CJK renders as tofu boxes or an inconsistent substitute. Set `a:latin` +
+  `a:ea` + `a:cs` to a CJK-capable font on every run that contains CJK text
+  (recipe in `create.md` → *CJK / East-Asian text*).
 
 ## What is out of scope
 
@@ -393,7 +401,8 @@ isn't, inform the user and offer to spawn a vision subagent instead.
 - **Reading / extracting**: [`read.md`](read.md) — plain-text export
   (including speaker notes), structural walk, metadata, thumbnails, image
   extraction, conversion to PDF / PNG for QA.
-- **Scripts**: [`scripts/`](scripts/) — self-contained CLI utilities.
+- **Scripts**: [`scripts/`](scripts/) — CLI utilities (some share a local
+  `soffice_bridge.py` helper; copy together when extracting).
 - **Live preview**: [`scripts/preview.ts`](scripts/preview.ts) — launcher
   (start/stop); [`scripts/preview_server.ts`](scripts/preview_server.ts) —
   background server that watches .pptx, converts to PDF, serves with
